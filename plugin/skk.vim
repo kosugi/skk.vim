@@ -2312,6 +2312,7 @@ function! SkkMap(silent)
   exe mapstr . '<CR>	<C-r>=<SID>SkkKey("<C-v><CR>")<CR><CR>'
   exe mapstr . '<C-j>	<C-r>=<SID>SkkKey("<C-v><C-j>")<CR>'
   exe mapstr . '<C-g>	<C-r>=<SID>SkkKey("<C-v><C-g>")<CR>'
+  exe mapstr . '<C-c>	<C-r>=<SID>SkkKey("<C-v><C-c>")<CR>'
   exe mapstr . '<BS>	<C-r>=<SID>SkkKey("<C-v><C-h>")<CR>'
   exe mapstr . '<C-h>	<C-r>=<SID>SkkKey("<C-v><C-h>")<CR>'
   exe mapstr . '<Home>	<C-r>=<SID>SkkKey("<C-v><C-a>")<CR><Home>'
@@ -2326,7 +2327,6 @@ function! SkkMap(silent)
   exe mapstr . '<C-u>	<C-r>=<SID>SkkKey("<C-v><C-u>")<CR><C-u>'
   if mode() !=# 'c'
     exe mapstr . '<Esc>	<C-r>=<SID>SkkKey("<C-v><Esc>")<CR><Esc>'
-    exe mapstr . '<C-c>	<C-r>=<SID>SkkKey("<C-v><Esc>")<CR><C-c>'
   endif
   exe mapstr . g:skk_abbrev_to_zenei_key . " <C-r>=<SID>SkkKey(\"<C-v><C-q>\")<CR>"
   if exists("g:format_command") && g:skk_autofill_toggle_key != ""
@@ -2407,8 +2407,11 @@ function! s:SkkKey(key)
     let &l:formatoptions = b:skk_fo_save
   elseif a:key == "\<C-j>"
     let str = s:SkkControlJ()
-  elseif a:key == "\<C-g>"
+  elseif a:key == "\<C-g>" || a:key == "\<C-c>"
     let str = s:SkkCancel()
+    if exists("s:skk_in_touroku") && str == ""
+      call feedkeys("\<C-c>")
+    endif
   elseif a:key == "\<C-h>"
     let str = s:SkkBackspace()
     if s:skk_in_cmdline && !g:skk_keep_state && getcmdpos() == 1 && strlen(getcmdline()) == 0
@@ -2984,7 +2987,7 @@ function! s:SkkSelectCandidate()
           let b:skk_current_cand = b:skk_current_cand - 1
           return s:SkkSelectCandidate()
         endif
-      elseif key == "\<C-g>"
+      elseif key == "\<C-g>" || key == "\<C-c>"
         return s:SkkCancel()
       endif
       let select = stridx(keys, toupper(key))
