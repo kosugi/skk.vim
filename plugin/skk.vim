@@ -1438,6 +1438,18 @@ endif
 if !exists('skk_external_prog_encoding')
   let skk_external_prog_encoding = ''
 endif
+
+if !exists('skk_server_host')
+  let skk_server_host = ''
+endif
+
+if !exists('skk_server_portnum')
+  let skk_server_portnum = ''
+endif
+
+if !exists('skk_server_encoding')
+  let skk_server_encoding = ''
+endif
 " }}}
 
 " script variables {{{
@@ -1455,6 +1467,7 @@ let s:skk_katakana = "ァアィイゥウェエォオカガキギクグケゲコ�
 " 上記の変数が存在していれば s:SkkGetline() s:SkkCursorCol() がその値を返す。
 let s:bs_save = &backspace
 let s:thisfile = expand("<sfile>")	" for RULES section
+let s:skk_client_ruby = 0
 
 " }}}
 
@@ -2972,7 +2985,11 @@ function! s:SkkSelectCandidate()
     endwhile
     let rest = b:skk_cand_count - cand
     let str = str . "[残り " . rest . "]"
-    let lines = (strlen(str) + &columns) / &columns
+    if exists('*strdisplaywidth')
+      let lines = (strdisplaywidth(str) + &columns) / &columns
+    else
+      let lines = (strlen(str) + &columns) / &columns
+    endif
     if lines > &cmdheight
       let saved_cmdheight = &cmdheight
       let &cmdheight = lines
@@ -3214,20 +3231,50 @@ function! s:SkkSearch(large)
     let cand = s:SkkSearchBuf(buf, 0)
   endif
   if cand == '' || a:large
-    if g:skk_external_prog != ""
-      if b:skk_henkan_key !~ "'"
-        if g:skk_external_prog_encoding == ''
-          let cand = system(g:skk_external_prog . " '" . b:skk_henkan_key . "'")
-        else
-          let key = iconv(b:skk_henkan_key, &enc, g:skk_external_prog_encoding)
-          let cand = system(g:skk_external_prog . " '" . key . "'")
-          let cand = iconv(cand, g:skk_external_prog_encoding, &enc)
+    if s:skk_client_ruby
+      let key = iconv(b:skk_henkan_key, &enc, g:skk_server_encoding)
+      ruby << EOF
+begin
+    VimSkk.send("1" + VIM.evaluate('key') + "\n", 0)
+    cands = VimSkk.recv(8192).split('/')
+
+    lis = []
+    dic = {}
+
+    cands.each do |i|
+        res, anno = i.split(';')
+        if dic[res] == nil
+            dic[res] = []
+            lis.push(res)
+        end
+        dic[res].push(anno)
+    end
+
+    res = lis.map do |i|
+        anno = dic[i].select {|a| a != nil}.join(',')
+        anno == '' ? i : "#{i};#{anno}"
+    end
+    VIM.command(%!let cand = '#{res.join('/').gsub("'", "\\'")}'!)
+end
+EOF
+      let cand = iconv(cand, g:skk_server_encoding, &enc)
+    end
+    if cand == ''
+      if g:skk_external_prog != ""
+        if b:skk_henkan_key !~ "'"
+          if g:skk_external_prog_encoding == ''
+            let cand = system(g:skk_external_prog . " '" . b:skk_henkan_key . "'")
+          else
+            let key = iconv(b:skk_henkan_key, &enc, g:skk_external_prog_encoding)
+            let cand = system(g:skk_external_prog . " '" . key . "'")
+            let cand = iconv(cand, g:skk_external_prog_encoding, &enc)
+          endif
         endif
+      else
+        let buf = s:SkkGetJisyoBuf("skk_large_jisyo")
+        let cand = s:SkkSearchBuf(buf, 1000)
       endif
-    else
-      let buf = s:SkkGetJisyoBuf("skk_large_jisyo")
-      let cand = s:SkkSearchBuf(buf, 1000)
-    endif
+    end
     let b:skk_large_jisyo_searched = 1
   endif
   return cand
@@ -4309,6 +4356,39 @@ if exists("skk_debug")
 endif
 
 " }}}
+
+ruby <<EOF
+require 'socket'
+
+class VimSkk
+    @@socket = nil
+
+    def VimSkk.open(host, port = nil)
+        begin
+            port = Socket.getservbyname('skkserv') if port == nil || port == ''
+            @@socket = TCPSocket.new(host, port)
+        rescue
+            return false
+        end
+        return true
+    end
+
+    def VimSkk.recv(maxlen)
+        return @@socket.recv(maxlen)
+    end
+
+    def VimSkk.send(mesg, flags)
+        return @@socket.send(mesg, flags)
+    end
+end
+
+host = VIM.evaluate('g:skk_server_host')
+port = VIM.evaluate('g:skk_server_portnum')
+
+if VimSkk.open(host, port)
+    VIM.command("let s:skk_client_ruby = 1")
+end
+EOF
 
 if v:version < 700
   finish
