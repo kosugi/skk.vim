@@ -1467,7 +1467,7 @@ let s:skk_katakana = "ァアィイゥウェエォオカガキギクグケゲコ�
 " 上記の変数が存在していれば s:SkkGetline() s:SkkCursorCol() がその値を返す。
 let s:bs_save = &backspace
 let s:thisfile = expand("<sfile>")	" for RULES section
-let s:skk_client_ruby = 0
+let s:skk_client = ''
 
 " }}}
 
@@ -3231,34 +3231,15 @@ function! s:SkkSearch(large)
     let cand = s:SkkSearchBuf(buf, 0)
   endif
   if cand == '' || a:large
-    if s:skk_client_ruby
+    if s:skk_client != ''
       let key = iconv(b:skk_henkan_key, &enc, g:skk_server_encoding)
-      ruby << EOF
-begin
-    VimSkk.send("1" + VIM.evaluate('key') + "\n", 0)
-    cands = VimSkk.recv(8192).split('/')
-
-    lis = []
-    dic = {}
-
-    cands.each do |i|
-        res, anno = i.split(';')
-        if dic[res] == nil
-            dic[res] = []
-            lis.push(res)
-        end
-        dic[res].push(anno)
-    end
-
-    res = lis.map do |i|
-        anno = dic[i].select {|a| a != nil}.join(',')
-        anno == '' ? i : "#{i};#{anno}"
-    end
-    VIM.command(%!let cand = '#{res.join('/').gsub("'", "\\'")}'!)
-end
-EOF
+      if s:skk_client == 'python'
+        python vim.command('let cand = "' + skk.lookup(vim.eval('key')).replace('"', '\\"') + '"')
+      elseif s:skk_client == 'ruby'
+        ruby VIM.command(%!let cand = "#{VimSkk.lookup(VIM.evaluate('key')).gsub('"', '\\"')}"!)
+      endif
       let cand = iconv(cand, g:skk_server_encoding, &enc)
-    end
+    endif
     if cand == ''
       if g:skk_external_prog != ""
         if b:skk_henkan_key !~ "'"
@@ -4359,7 +4340,69 @@ endif
 
 " }}}
 
-ruby <<EOF
+if has('python')
+  python <<EOF
+import socket
+import vim
+
+class VimSkk:
+    def __init__(self, host = 'localhost', port = 'skkserv'):
+	result = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+	if len(result) == 0:
+	    raise
+	self.sock = socket.socket(result[0][0], result[0][1], result[0][2])
+	self.sock.connect(result[0][4])
+
+    def lookup(self, key, uniting = True):
+	if key[-1] == ' ':
+	    sp = ''
+	else:
+	    sp = ' '
+
+        try:
+            self.sock.send("1" + key + sp + "\n")
+            result = self.sock.recv(8192)
+        except:
+            result = ''
+
+	if uniting:
+	    return VimSkk.unite(result)
+	else:
+	    return result
+
+    @staticmethod
+    def unite(old):
+	lis = []
+	dic = {}
+
+	for cand in old.split('/'):
+	    pair = cand.split(';')
+	    if pair[0] not in dic:
+		dic[pair[0]] = []
+		lis.append(pair[0])
+	    if len(pair) == 2:
+		dic[pair[0]].append(pair[1])
+
+	res = [ent + ((';' + ','.join(dic[ent])) if len(dic[ent]) > 0 else '')
+	       for ent in lis]
+	return '/'.join(res)
+
+host = vim.eval('g:skk_server_host')
+if host == '':
+    host = 'localhost'
+
+port = vim.eval('g:skk_server_portnum')
+if port == '':
+    port = 'skkserv'
+
+try:
+    skk = VimSkk(host, port)
+    vim.command("let s:skk_client = 'python'")
+except:
+    pass
+EOF
+elseif has('ruby')
+  ruby <<EOF
 require 'socket'
 
 class VimSkk
@@ -4375,12 +4418,30 @@ class VimSkk
         return true
     end
 
-    def VimSkk.recv(maxlen)
-        return @@socket.recv(maxlen)
-    end
+    def VimSkk.lookup(key)
+        begin
+            @@socket.send("1#{key}\n", 0)
+            result = @@socket.recv(8192)
 
-    def VimSkk.send(mesg, flags)
-        return @@socket.send(mesg, flags)
+            lis = []
+            dic = {}
+
+            result.split('/').each do |i|
+                res, anno = i.split(';')
+                if dic[res] == nil
+                    dic[res] = []
+                    lis.push(res)
+                end
+                dic[res].push(anno)
+            end
+
+            res = lis.map do |i|
+                anno = dic[i].select {|a| a != nil}.join(',')
+                anno == '' ? i : "#{i};#{anno}"
+            end
+
+            return res.join('/')
+        end
     end
 end
 
@@ -4388,9 +4449,10 @@ host = VIM.evaluate('g:skk_server_host')
 port = VIM.evaluate('g:skk_server_portnum')
 
 if VimSkk.open(host, port)
-    VIM.command("let s:skk_client_ruby = 1")
+    VIM.command("let s:skk_client = 'ruby'")
 end
 EOF
+endif
 
 if v:version < 700
   finish
