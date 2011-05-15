@@ -3247,7 +3247,7 @@ function! s:SkkSearch(large)
             let cand = system(g:skk_external_prog . " '" . b:skk_henkan_key . "'")
           else
             let key = iconv(b:skk_henkan_key, &enc, g:skk_external_prog_encoding)
-            let cand = system(g:skk_external_prog . " '" . key . "'")
+            let cand = system(g:skk_external_prog, key)
             let cand = iconv(cand, g:skk_external_prog_encoding, &enc)
           endif
         endif
