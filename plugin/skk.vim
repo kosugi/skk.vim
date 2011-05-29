@@ -2470,8 +2470,10 @@ endfunction
 " 入力の大元。ここで状態、キーを見てそれぞれの関数を呼び出す。
 function! s:SkkInsert(char)
   if b:skk_mode == 'ascii'
+    let &l:formatoptions = b:skk_fo_save
     return a:char
   elseif b:skk_mode == 'zenei'
+    let &l:formatoptions = b:skk_fo_save
     return s:SkkInsertZenei(a:char)
   else		" hira|kata
     try
