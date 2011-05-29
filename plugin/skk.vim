@@ -1742,7 +1742,6 @@ endfunction
 function! s:SkkBufInit()
   let b:skk_on = 0		" 0=off 1=on
   let b:skk_mode = g:skk_initial_mode	" hira|kata|zenei|ascii
-  let b:skk_line = 0		" 現在の行 (hira|kata だけで使う)
   let b:skk_rom = ""		" 入力途中のローマ字 (hira|kata だけで使う)
   let b:skk_romv = ""		" 入力途中のローマ字 変数名
   let b:skk_rstart = 0		" ローマ字のスタート桁 (hira|kata だけで使う)
@@ -2007,6 +2006,8 @@ endfunction
 function! SkkToggleKana(kana)
   if b:skk_henkan_mode == 1 || b:skk_henkan_mode == 2
     let kana = a:kana . s:SkkCleanRom()
+    let b:skk_hstart = s:SkkMarkerCol(g:skk_marker_white)
+    let b:skk_ostart = s:SkkMarkerCol(g:skk_marker_okuri)
     let ostart = b:skk_henkan_mode == 2 ? b:skk_ostart : s:SkkCursorCol()
     let hstart = b:skk_hstart + strlen(g:skk_marker_white) - 1
     let kana = strpart(s:SkkGetLine("."), hstart, ostart - 1 - hstart) . kana
@@ -2023,6 +2024,7 @@ function! SkkAbbrev2Zenei()
   if b:skk_abbrev_mode_on == 0
     return ""
   endif
+  let b:skk_hstart = s:SkkMarkerCol(g:skk_marker_white)
   let hstart = b:skk_hstart + strlen(g:skk_marker_white) - 1
   let str = strpart(s:SkkGetLine("."), hstart, s:SkkCursorCol() - 1 - hstart)
   call s:SkkCleanRom()
@@ -2214,30 +2216,7 @@ endfunction
 " skk_hstart からカーソル位置まで削除する。
 function! s:SkkEraseYomi()
   let lnum = s:SkkCursorLine()
-  if b:skk_line == lnum
-    call s:SkkDeleteRange(lnum, b:skk_hstart, s:SkkCursorCol())
-  else
-    call s:SkkEraseYomi2(b:skk_line, b:skk_hstart, lnum, s:SkkCursorCol())
-  endif
-endfunction
-
-" SkkEraseYomi2 複数行バージョン
-function! s:SkkEraseYomi2(lstart, start, lend, end)
-  let str = strpart(getline(a:lstart), a:start - 1) . "\n"
-  let i = a:lstart + 1
-  while i < a:lend
-    let str = str . getline(i) . "\n"
-    let i = i + 1
-  endwhile
-  let str = str . strpart(getline(a:lend), 0, a:end - 1)
-  let len = strlen(substitute(str, ".", "x", "g"))
-  if len > 0
-    let bs = s:SkkMakeBS(len)
-    let s:skk_bs_str = exists("s:skk_bs_str") ? s:skk_bs_str . bs : bs
-    let s:skk_cur_col = a:start + 1
-    let s:skk_cur_line = a:lstart
-    set backspace=indent,eol
-  endif
+  call s:SkkDeleteRange(lnum, b:skk_hstart, s:SkkCursorCol())
 endfunction
 " }}}
 
@@ -2270,7 +2249,8 @@ function! s:SkkBackspace()
     if strlen(b:skk_rom) > 0
       let b:skk_rom = strpart(b:skk_rom, 0, strlen(b:skk_rom) - 1)
       let b:skk_romv = s:ValidVarChar(b:skk_rom)
-    elseif b:skk_henkan_mode == 1 && s:SkkCursorCol() <= b:skk_hstart + strlen(g:skk_marker_white)
+    elseif b:skk_henkan_mode == 1 && s:SkkGetLine(".") =~ (g:skk_marker_white . '$')
+      let b:skk_hstart = s:SkkCursorCol() - strlen(g:skk_marker_white)
       call s:SkkKakutei()
       return ''
     elseif b:skk_henkan_mode == 3
@@ -2500,8 +2480,7 @@ function! s:SkkInsert(char)
           call s:SkkKakutei() " ▽の削除 ( 確定 )
           return g:skk_sticky_key
         endif
-        if b:skk_rstart == 0 || b:skk_line != s:SkkCursorLine()
-          let b:skk_line = s:SkkCursorLine()
+        if b:skk_rstart == 0
           let b:skk_rstart = s:SkkCursorCol()
         endif
         let b:skk_ostart = strlen(kana) + b:skk_rstart
@@ -2544,8 +2523,7 @@ endfunction
 " ひらがな、カタカナを入力する。
 function! s:SkkInsertKana(char)
   call s:SkkEraseRom()
-  if b:skk_rstart == 0 || b:skk_line != s:SkkCursorLine()
-    let b:skk_line = s:SkkCursorLine()
+  if b:skk_rstart == 0
     let b:skk_rstart = s:SkkCursorCol()
   endif
   let kana = ''
@@ -2738,7 +2716,6 @@ function! SkkSetHenkanPoint1(kana)
   endif
   let b:skk_hstart = s:SkkCursorCol() + strlen(kana)
   let b:skk_rstart = b:skk_hstart + strlen(g:skk_marker_white)
-  let b:skk_line = s:SkkCursorLine()
   let b:skk_ostart = 0
   let b:skk_okurigana = ""
   let b:skk_henkan_mode = 1
@@ -2935,17 +2912,20 @@ function! s:SkkKakutei()
     let kana = s:SkkCleanRom()
   elseif b:skk_henkan_mode == 1
     let kana = s:SkkCleanRom()
+    let b:skk_hstart = s:SkkMarkerCol(g:skk_marker_white)
     let end = b:skk_hstart + strlen(g:skk_marker_white)
-    call s:SkkDeleteRange(b:skk_line, b:skk_hstart, end)
+    call s:SkkDeleteRange(s:SkkCursorLine(), b:skk_hstart, end)
   elseif b:skk_henkan_mode == 2
     " 送り仮名も削除する
-    call s:SkkDeleteRange(b:skk_line, b:skk_ostart, s:SkkCursorCol())
+    call s:SkkDeleteRange(s:SkkCursorLine(), b:skk_ostart, s:SkkCursorCol())
+    let b:skk_hstart = s:SkkMarkerCol(g:skk_marker_white)
     let end = b:skk_hstart + strlen(g:skk_marker_white)
-    call s:SkkDeleteRange(b:skk_line, b:skk_hstart, end)
+    call s:SkkDeleteRange(s:SkkCursorLine(), b:skk_hstart, end)
   elseif b:skk_henkan_mode == 3
     call s:SkkFaceOff()
+    let b:skk_hstart = s:SkkMarkerCol(g:skk_marker_black)
     let end = b:skk_hstart + strlen(g:skk_marker_black)
-    call s:SkkDeleteRange(b:skk_line, b:skk_hstart, end)
+    call s:SkkDeleteRange(s:SkkCursorLine(), b:skk_hstart, end)
     " 辞書に書き込むのは状態3と4だけ。
     call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
   elseif b:skk_henkan_mode == 4
@@ -3037,7 +3017,6 @@ endfunction
 
 function! s:SkkSaveEnv()
   let env = 'b:skk_rstart = ' . b:skk_rstart . "\<NL>"
-  let env = env . 'b:skk_line = ' . b:skk_line . "\<NL>"
   let env = env . 'b:skk_hstart = ' . b:skk_hstart . "\<NL>"
   let env = env . 'b:skk_ostart = ' . b:skk_ostart . "\<NL>"
   let env = env . 'b:skk_cand_count = ' . b:skk_cand_count . "\<NL>"
@@ -4070,15 +4049,15 @@ function! s:SkkFaceOn(cand)
   endif
   try
     let lc = strlen(substitute(a:cand, "[^\n\r]", "", "g"))
+    let l = s:SkkCursorLine()
     if lc == 0
-      let l = b:skk_line
       let sc = b:skk_hstart + strlen(g:skk_marker_black) - 1
       let se = sc + strlen(a:cand) + 1
       exe 'match skk_henkan /\%' . l . 'l\%>' . sc . 'c\%<' . se . 'c./'
     else
-      let sl = b:skk_line - 1
-      let el = b:skk_line + lc + 1
-      if indent(b:skk_line) > 0
+      let sl = l - 1
+      let el = l + lc + 1
+      if indent(l) > 0
         let cand = substitute(a:cand, "[\n\r]", "\n[[:blank:]]*", "g")
       else
         let cand = a:cand
