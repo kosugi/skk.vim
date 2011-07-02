@@ -3095,7 +3095,6 @@ function! s:SkkTourokuMode()
     let s:skk_in_touroku = 1
     call SkkMap(0)
     cnoremap <buffer> <C-g> <C-\>e<SID>SkkCmdCancel()<CR>
-    cnoremap <buffer> <C-c> <C-\>e<SID>SkkCmdCancel()<CR>
     let cmd = "call cursor(" . line(".") . ", " . col(".") . ")"
   endif
   let prev = s:SkkGetLine(0)
