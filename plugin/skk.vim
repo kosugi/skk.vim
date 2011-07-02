@@ -1756,6 +1756,7 @@ function! s:SkkBufInit()
   if !exists("b:skk_fo_save")
     let b:skk_fo_save = &formatoptions
   endif
+  let b:skk_smd_save = &showmode
   let b:skk_autofill = 0	" Auto Fill モードか？
   if !exists("b:skk_map_silent")
     let b:skk_map_silent = 2	" <silent> 付きでマップしたか？
@@ -2376,6 +2377,9 @@ function! s:SkkKey(key)
   let s:skk_in_cmdline = mode() == "c"
   unlet! s:skk_cmdline_str s:skk_cmdline_pos s:skk_bs_str s:skk_cur_col s:skk_cur_line
   let &l:formatoptions = ""
+  let &showmode = b:skk_smd_save
+  echo ''
+  redraw
   let b:skk_rom_erased = 0
   if b:skk_on == 0
     call s:SkkOn()
@@ -2815,7 +2819,11 @@ function! SkkStartHenkan(...)
       endif
       return s:SkkSelectCandidate()
     else
-      let cand = s:SkkGetCandStrConverted(b:skk_current_cand)
+      let mlist = matchlist(s:SkkGetCandStrWithAnnotation(b:skk_current_cand), '\v([^;]*);?(.*)')
+      let cand = mlist[1]
+      let anno = mlist[2]
+      set noshowmode
+      echo anno
       call s:SkkFaceOn(cand)
       return g:skk_marker_black . cand . b:skk_okurigana
     endif
@@ -2851,7 +2859,9 @@ function! SkkStartHenkan(...)
       let b:skk_henkan_key = s:SkkGetHenkanKey(b:skk_midasi, b:skk_okurigana)
     endif
     let b:skk_large_jisyo_searched = 0
-    let cand = s:SkkMakeCandidates(s:SkkSearch(0))
+    let mlist = matchlist(s:SkkMakeCandidates(s:SkkSearch(0)), '\v([^;]*);?(.*)')
+    let cand = mlist[1]
+    let anno = mlist[2]
     call s:SkkEraseYomi()
     if cand == ''
       if !b:skk_large_jisyo_searched
@@ -2861,11 +2871,17 @@ function! SkkStartHenkan(...)
         " 単語登録
         return s:SkkTourokuMode()
       else
-        let cand = s:SkkGetCandStrConverted(0)
+        let mlist = matchlist(s:SkkGetCandStrWithAnnotation(0), '\v([^;]*);?(.*)')
+        let cand = mlist[1]
+        let anno = mlist[2]
+        set noshowmode
+        echo anno
         call s:SkkFaceOn(cand)
         return g:skk_marker_black . cand .  b:skk_okurigana
       endif
     else
+      set noshowmode
+      echo anno
       call s:SkkFaceOn(cand)
       return g:skk_marker_black . cand . b:skk_okurigana
     endif
@@ -2881,7 +2897,11 @@ function! SkkPreviousCand()
   if b:skk_current_cand >= g:skk_show_candidates_count
     return s:SkkSelectCandidate()
   else
-    let cand = s:SkkGetCandStrConverted(b:skk_current_cand)
+    let mlist = matchlist(s:SkkGetCandStrWithAnnotation(b:skk_current_cand), '\v([^;]*);?(.*)')
+    let cand = mlist[1]
+    let anno = mlist[2]
+    set noshowmode
+    echo anno
     call s:SkkFaceOn(cand)
     return g:skk_marker_black . cand . b:skk_okurigana
   endif
@@ -3463,7 +3483,7 @@ endfunction
 function! s:SkkMakeCandidates(str)
   call s:SkkCleanupCandidates()
   call s:SkkAddCandidates(a:str)
-  return b:skk_cand_count == 0 ? '' : s:SkkGetCandStrConverted(0)
+  return b:skk_cand_count == 0 ? '' : s:SkkGetCandStrWithAnnotation(0)
 endfunction
 
 function! s:SkkCleanupCandidates()
