@@ -2251,7 +2251,7 @@ function! s:SkkBackspace()
     if strlen(b:skk_rom) > 0
       let b:skk_rom = strpart(b:skk_rom, 0, strlen(b:skk_rom) - 1)
       let b:skk_romv = s:ValidVarChar(b:skk_rom)
-    elseif b:skk_henkan_mode == 1 && s:SkkGetLine(".") =~ (g:skk_marker_white . '$')
+    elseif b:skk_henkan_mode == 1 && strpart(s:SkkGetLine("."), 0, col('.') - 1) =~ (g:skk_marker_white . '$')
       let b:skk_hstart = s:SkkCursorCol() - strlen(g:skk_marker_white)
       call s:SkkKakutei()
       return ''
