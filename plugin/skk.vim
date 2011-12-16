@@ -3718,8 +3718,10 @@ function! s:SkkSaveJisyo(confirm, silent)
           let list = list[0:0]
         endif
         let tmp = tempname()
-        call writefile([], tmp)
-        call system("chmod 600 " . tmp)
+        if executable('chmod')
+          call writefile([], tmp)
+          call system("chmod 600 " . tmp)
+        endif
         call writefile(list, tmp, 'b')
         let jisyosize = getfsize(tmp)
       endif
