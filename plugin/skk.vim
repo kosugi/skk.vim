@@ -1451,6 +1451,10 @@ endif
 if !exists('skk_server_encoding')
   let skk_server_encoding = ''
 endif
+
+if !exists('skk_client_interface')
+  let skk_client_interface = ''
+endif
 " }}}
 
 " script variables {{{
@@ -1468,7 +1472,7 @@ let s:skk_katakana = "ァアィイゥウェエォオカガキギクグケゲコ�
 " 上記の変数が存在していれば s:SkkGetline() s:SkkCursorCol() がその値を返す。
 let s:bs_save = &backspace
 let s:thisfile = expand("<sfile>")	" for RULES section
-let s:skk_client = ''
+let s:skk_client_connected = 0
 
 " }}}
 
@@ -1924,6 +1928,30 @@ function! SkkEnable()
   endif
   if b:skk_on
     return ''
+  endif
+
+  if !s:skk_client_connected && g:skk_server_host != ''
+    if g:skk_client_interface == 'python'
+      python <<EOF
+host = vim.eval('g:skk_server_host') or 'localhost'
+port = vim.eval('g:skk_server_portnum') or 'skkserv'
+
+try:
+    skk = VimSkk(host, port)
+    vim.command("let s:skk_client_connected = 1")
+except:
+    pass
+EOF
+    elseif g:skk_client_interface == 'ruby'
+      ruby <<EOF
+host = VIM.evaluate('g:skk_server_host')
+port = VIM.evaluate('g:skk_server_portnum')
+
+if VimSkk.open(host, port)
+    VIM.command("let s:skk_client_connected = 1")
+end
+EOF
+    endif
   endif
 
   let s:skk_in_cmdline = mode() == "c"
@@ -3233,11 +3261,11 @@ function! s:SkkSearch(large)
     let cand = s:SkkSearchBuf(buf, 0)
   endif
   if cand == '' || a:large
-    if s:skk_client != ''
+    if s:skk_client_connected
       let key = iconv(b:skk_henkan_key, &enc, g:skk_server_encoding)
-      if s:skk_client == 'python'
+      if g:skk_client_interface == 'python'
         python vim.command('let cand = "' + skk.lookup(vim.eval('key')).replace('"', '\\"') + '"')
-      elseif s:skk_client == 'ruby'
+      elseif g:skk_client_interface == 'ruby'
         ruby VIM.command(%!let cand = "#{VimSkk.lookup(VIM.evaluate('key')).gsub('"', '\\"')}"!)
       endif
       let cand = iconv(cand, g:skk_server_encoding, &enc)
@@ -4342,68 +4370,52 @@ endif
 
 " }}}
 
-if has('python')
+" SKK client {{{
+
+function! SkkPythonClientInit()
+  if !has('python')
+    return 0
+  endif
+
   python <<EOF
 import socket
 import vim
 
 class VimSkk:
     def __init__(self, host = 'localhost', port = 'skkserv'):
-	result = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
-	if len(result) == 0:
-	    raise
-	self.sock = socket.socket(result[0][0], result[0][1], result[0][2])
-	self.sock.connect(result[0][4])
+        result = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+        if len(result) == 0:
+            raise
+        self.sock = socket.socket(result[0][0], result[0][1], result[0][2])
+        self.sock.settimeout(3.0)
+        self.sock.connect(result[0][4])
 
-    def lookup(self, key, uniting = True):
-	if key[-1] == ' ':
-	    sp = ''
-	else:
-	    sp = ' '
+    def lookup(self, key):
+        sp = ' ' if key[-1] == '' else ''
 
+        result = ''
         try:
             self.sock.send("1" + key + sp + "\n")
-            result = self.sock.recv(8192)
+            while True:
+                result += self.sock.recv(8192)
+                if result.endswith("\n"):
+                    break
         except:
+            self.sock.close()
+            vim.command("let s:skk_client_connected = 0")
             result = ''
 
-	if uniting:
-	    return VimSkk.unite(result)
-	else:
-	    return result
-
-    @staticmethod
-    def unite(old):
-	lis = []
-	dic = {}
-
-	for cand in old.split('/'):
-	    pair = cand.split(';')
-	    if pair[0] not in dic:
-		dic[pair[0]] = []
-		lis.append(pair[0])
-	    if len(pair) == 2:
-		dic[pair[0]].append(pair[1])
-
-	res = [ent + ((';' + ','.join(dic[ent])) if len(dic[ent]) > 0 else '')
-	       for ent in lis]
-	return '/'.join(res)
-
-host = vim.eval('g:skk_server_host')
-if host == '':
-    host = 'localhost'
-
-port = vim.eval('g:skk_server_portnum')
-if port == '':
-    port = 'skkserv'
-
-try:
-    skk = VimSkk(host, port)
-    vim.command("let s:skk_client = 'python'")
-except:
-    pass
+        return result
 EOF
-elseif has('ruby')
+
+  return 1
+endfunction
+
+function! SkkRubyClientInit()
+  if !has('ruby')
+    return 0
+  endif
+
   ruby <<EOF
 require 'socket'
 
@@ -4421,40 +4433,37 @@ class VimSkk
     end
 
     def VimSkk.lookup(key)
+        sp = key[-1] == ' ' ? '' : ' '
         begin
-            @@socket.send("1#{key}\n", 0)
+            @@socket.send("1#{key}#{sp}\n", 0)
             result = @@socket.recv(8192)
-
-            lis = []
-            dic = {}
-
-            result.split('/').each do |i|
-                res, anno = i.split(';')
-                if dic[res] == nil
-                    dic[res] = []
-                    lis.push(res)
-                end
-                dic[res].push(anno)
-            end
-
-            res = lis.map do |i|
-                anno = dic[i].select {|a| a != nil}.join(',')
-                anno == '' ? i : "#{i};#{anno}"
-            end
-
-            return res.join('/')
+        rescue
+            result = ''
+            @@socket.close()
+            VIM.command("let s:skk_client_connected = 0")
         end
+
+        return result
     end
 end
-
-host = VIM.evaluate('g:skk_server_host')
-port = VIM.evaluate('g:skk_server_portnum')
-
-if VimSkk.open(host, port)
-    VIM.command("let s:skk_client = 'ruby'")
-end
 EOF
+endfunction
+
+if g:skk_client_interface == 'python'
+  call SkkPythonClientInit()
+elseif g:skk_client_interface == 'ruby'
+  call SkkRubyClientInit()
+elseif g:skk_client_interface == ''
+  if SkkPythonClientInit()
+    let g:skk_client_interface = 'python'
+  elseif SkkRubyClientInit()
+    let g:skk_client_interface = 'ruby'
+  else
+    let g:skk_client_interface = 'NONE'
+  endif
 endif
+
+" }}}
 
 if v:version < 700
   finish
