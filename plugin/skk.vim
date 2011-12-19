@@ -4449,6 +4449,8 @@ class VimSkk
     end
 end
 EOF
+
+  return 1
 endfunction
 
 if g:skk_client_interface == 'python'
