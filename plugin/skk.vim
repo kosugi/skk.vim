@@ -4438,7 +4438,7 @@ class VimSkk
         sp = key[-1] == ' ' ? '' : ' '
         begin
             @@socket.send("1#{key}#{sp}\n", 0)
-            result = @@socket.recv(8192)
+            result = @@socket.gets()
         rescue
             result = ''
             @@socket.close()
