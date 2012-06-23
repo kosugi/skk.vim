@@ -2534,6 +2534,11 @@ function! s:SkkInsert(char)
       elseif b:skk_abbrev_mode_on == 1
         return a:char
       elseif b:skk_henkan_mode == 1 && stridx(g:skk_special_midasi_keys, a:char) != -1
+        let kana = s:SkkCleanRom()
+        if kana == '' &&
+        \  s:SkkCursorCol() == b:skk_hstart + strlen(g:skk_marker_white)
+          return a:char
+        endif
         return SkkStartHenkan(">")
       elseif b:skk_henkan_mode == 2
         return SkkSetHenkanPoint(a:char)
