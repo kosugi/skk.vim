@@ -2095,6 +2095,9 @@ endfunction
 " SkkAsciiMode
 " ASCII直接入力モードにする。
 function! SkkAsciiMode(kana)
+  if b:skk_henkan_mode == 2
+    return a:kana
+  endif
   let kana = a:kana . s:SkkKakutei()
   let b:skk_mode = 'ascii'
   call s:SkkSetCursorColor()
