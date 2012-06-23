@@ -1455,6 +1455,14 @@ endif
 if !exists('skk_client_interface')
   let skk_client_interface = ''
 endif
+
+if !exists('skk_auto_learning')
+  let skk_auto_learning = 1
+endif
+
+if !exists("skk_auto_learning_toggle")
+  let skk_auto_learning_toggle = "gL"
+endif
 " }}}
 
 " script variables {{{
@@ -1880,6 +1888,12 @@ endif
 nnoremap <silent> <Plug>(skk-save-jisyo)    :call <SID>SkkSaveJisyo(1, 0)<CR>
 if g:skk_manual_save_jisyo_keys != ""
   exe "nmap" g:skk_manual_save_jisyo_keys "<Plug>(skk-save-jisyo)"
+endif
+
+nnoremap <silent> <Plug>(skk-auto-learning-toggle)
+\       :let g:skk_auto_learning = !g:skk_auto_learning<CR>
+if g:skk_auto_learning_toggle != ""
+  exe "nmap" g:skk_auto_learning_toggle "<Plug>(skk-auto-learning-toggle)"
 endif
 
 " 終了時に辞書の保存
@@ -2984,10 +2998,14 @@ function! s:SkkKakutei()
     let end = b:skk_hstart + strlen(g:skk_marker_black)
     call s:SkkDeleteRange(s:SkkCursorLine(), b:skk_hstart, end)
     " 辞書に書き込むのは状態3と4だけ。
-    call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
+    if g:skk_auto_learning
+      call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
+    endif
   elseif b:skk_henkan_mode == 4
     call s:SkkFaceOff()
-    call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
+    if g:skk_auto_learning
+      call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
+    endif
   endif
   let b:skk_henkan_mode = 0
   let b:skk_rom = ''
