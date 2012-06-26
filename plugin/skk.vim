@@ -1463,6 +1463,10 @@ endif
 if !exists("skk_auto_learning_toggle_keys")
   let skk_auto_learning_toggle_keys = "gL"
 endif
+
+if !exists("skk_auto_learning_once_key")
+  let skk_auto_learning_once_key = "<C-l>"
+endif
 " }}}
 
 " script variables {{{
@@ -1773,6 +1777,7 @@ function! s:SkkBufInit()
   if !exists("b:skk_map_silent")
     let b:skk_map_silent = 2	" <silent> 付きでマップしたか？
   endif
+  let b:skk_auto_learning_once = 0
   call s:SkkSetCursorColor() " カーソル色の設定
 endfunction
 
@@ -2377,6 +2382,9 @@ function! SkkMap(silent)
   if exists("g:format_command") && g:skk_autofill_toggle_key != ""
     exe mapstr . g:skk_autofill_toggle_key . " <C-r>=<SID>SkkKey(\"<C-v><C-k>\")<CR>"
   endif
+  if g:skk_auto_learning_once_key != ""
+    exe mapstr . g:skk_auto_learning_once_key . " <C-r>=<SID>SkkKey(\"<C-v><C-l>\")<CR>"
+  endif
 endfunction
 
 function! s:SkkMapCR()
@@ -2478,6 +2486,9 @@ function! s:SkkKey(key)
     let str = SkkAbbrev2Zenei()
   elseif a:key == "\<C-k>"
     let b:skk_autofill = b:skk_autofill ? 0 : 1
+    let str = ""
+  elseif a:key == "\<C-l>"
+    let b:skk_auto_learning_once = !b:skk_auto_learning_once
     let str = ""
   else
     if b:skk_autofill && s:skk_in_cmdline == 0 && b:skk_henkan_mode == 0 && b:skk_rom == ""
@@ -2895,6 +2906,7 @@ function! SkkStartHenkan(...)
       let b:skk_okurigana = ''
     endif
     let b:skk_henkan_mode = 3
+    let b:skk_auto_learning_once = 0
     let hstart = b:skk_hstart + strlen(g:skk_marker_white) - 1
     let b:skk_midasi = strpart(line, hstart, b:skk_ostart - 1 - hstart) . kana
     if b:skk_midasi == ""
@@ -2998,12 +3010,14 @@ function! s:SkkKakutei()
     let end = b:skk_hstart + strlen(g:skk_marker_black)
     call s:SkkDeleteRange(s:SkkCursorLine(), b:skk_hstart, end)
     " 辞書に書き込むのは状態3と4だけ。
-    if g:skk_auto_learning
+    if g:skk_auto_learning || b:skk_auto_learning_once
+      let b:skk_auto_learning_once = 0
       call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
     endif
   elseif b:skk_henkan_mode == 4
     call s:SkkFaceOff()
-    if g:skk_auto_learning
+    if g:skk_auto_learning || b:skk_auto_learning_once
+      let b:skk_auto_learning_once = 0
       call s:SkkUpdateJisyo(b:skk_cand_{b:skk_current_cand})
     endif
   endif
@@ -3068,6 +3082,9 @@ function! s:SkkSelectCandidate()
         endif
       elseif key == "\<C-g>" || key == "\<C-c>"
         return s:SkkCancel()
+      elseif key == "\<C-l>"
+        let b:skk_auto_learning_once = !b:skk_auto_learning_once
+        continue
       endif
       let select = stridx(keys, toupper(key))
       if select == -1 || select >= i
