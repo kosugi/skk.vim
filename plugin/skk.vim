@@ -1460,8 +1460,8 @@ if !exists('skk_auto_learning')
   let skk_auto_learning = 1
 endif
 
-if !exists("skk_auto_learning_toggle")
-  let skk_auto_learning_toggle = "gL"
+if !exists("skk_auto_learning_toggle_keys")
+  let skk_auto_learning_toggle_keys = "gL"
 endif
 " }}}
 
@@ -1892,8 +1892,8 @@ endif
 
 nnoremap <silent> <Plug>(skk-auto-learning-toggle)
 \       :let g:skk_auto_learning = !g:skk_auto_learning<CR>
-if g:skk_auto_learning_toggle != ""
-  exe "nmap" g:skk_auto_learning_toggle "<Plug>(skk-auto-learning-toggle)"
+if g:skk_auto_learning_toggle_keys != ""
+  exe "nmap" g:skk_auto_learning_toggle_keys "<Plug>(skk-auto-learning-toggle)"
 endif
 
 " 終了時に辞書の保存
