@@ -2304,6 +2304,7 @@ function! s:SkkBackspace()
     elseif b:skk_henkan_mode == 1 && strpart(s:SkkGetLine("."), 0, col('.') - 1) =~ (g:skk_marker_white . '$')
       let b:skk_hstart = s:SkkCursorCol() - strlen(g:skk_marker_white)
       call s:SkkKakutei()
+      unlet! b:skk_comp_key
       return ''
     elseif b:skk_henkan_mode == 3
       call s:SkkKakutei()
@@ -4435,12 +4436,12 @@ class VimSkk:
         self.sock.settimeout(3.0)
         self.sock.connect(result[0][4])
 
-    def lookup(self, key):
-        sp = ' ' if key[-1] == '' else ''
+    def request(self, cmd, key):
+        sp = '' if key[-1] == ' ' else ' '
 
         result = ''
         try:
-            self.sock.send("1" + key + sp + "\n")
+            self.sock.send(cmd + key + sp + "\n")
             while True:
                 result += self.sock.recv(8192)
                 if result.endswith("\n"):
@@ -4451,6 +4452,13 @@ class VimSkk:
             result = ''
 
         return result
+
+    def lookup(self, key):
+        return self.request('1', key)
+
+    def complete(self, key):
+        return self.request('4', key)
+
 EOF
 
   return 1
@@ -4477,10 +4485,10 @@ class VimSkk
         return true
     end
 
-    def VimSkk.lookup(key)
+    def VimSkk.request(cmd, key)
         sp = key[-1] == ' ' ? '' : ' '
         begin
-            @@socket.send("1#{key}#{sp}\n", 0)
+            @@socket.send("#{cmd}#{key}#{sp}\n", 0)
             result = @@socket.gets()
         rescue
             result = ''
@@ -4489,6 +4497,14 @@ class VimSkk
         end
 
         return result
+    end
+
+    def VimSkk.lookup(key)
+        return VimSkk.request('1', key)
+    end
+
+    def VimSkk.complete(key)
+        return VimSkk.request('4', key)
     end
 end
 EOF
@@ -4695,6 +4711,7 @@ function! s:SkkCompSearch(first, key, flag)
   let kata = b:skk_mode == 'kata'
   if a:first
     let b:skk_comp_num = 0
+    let b:skk_serv_comp_num = -1
   endif
   if a:flag == "bW"
     let num = b:skk_comp_num - 1
@@ -4716,8 +4733,38 @@ function! s:SkkCompSearch(first, key, flag)
       let &enc = l:enc_save
     endif
   endtry
-  if lnum < 0 || num == 0
+  if num == 0
     return ""
+  endif
+
+  if lnum < 0
+    if s:skk_client_connected && b:skk_serv_comp_num == -1
+      let key = iconv(a:key, &enc, g:skk_server_encoding)
+      let cand = ''
+      if g:skk_client_interface == 'python'
+        python vim.command('let cand = "' + skk.complete(vim.eval('key')).replace('"', '\\"') + '"')
+      elseif g:skk_client_interface == 'ruby'
+        ruby VIM.command(%!let cand = "#{VimSkk.complete(VIM.evaluate('key')).gsub('"', '\\"')}"!)
+      endif
+      let cand = iconv(cand, g:skk_server_encoding, &enc)
+      let list = split(cand, '/')
+
+      let b:skk_serv_comp_num = num
+      if len(list) < 2
+        let b:skk_serv_comp = []
+      elseif list[1] ==# a:key
+        let b:skk_serv_comp = list[2:-2]
+      else
+        let b:skk_serv_comp = list[1:-2]
+      endif
+    endif
+    let serv_comp_num = num - b:skk_serv_comp_num
+    if serv_comp_num < len(b:skk_serv_comp)
+      let b:skk_comp_num = num
+      return b:skk_serv_comp[serv_comp_num]
+    else
+      return ""
+    endif
   else
     let b:skk_comp_num = num
     let line = buf[lnum]
