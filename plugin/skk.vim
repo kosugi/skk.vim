@@ -2159,6 +2159,9 @@ function! SkkGetModeStr()
   if exists("b:skk_autofill") && b:skk_autofill && str != " "
     let str = str . "FILL"
   endif
+  if exists("b:skk_auto_learning_once") && b:skk_auto_learning_once && str != " "
+    let str = str . "LEARN"
+  endif
   return str
 endfunction
 " }}}
@@ -2489,7 +2492,9 @@ function! s:SkkKey(key)
     let b:skk_autofill = b:skk_autofill ? 0 : 1
     let str = ""
   elseif a:key == "\<C-l>"
-    let b:skk_auto_learning_once = !b:skk_auto_learning_once
+    if b:skk_henkan_mode == 3
+      let b:skk_auto_learning_once = !b:skk_auto_learning_once
+    endif
     let str = ""
   else
     if b:skk_autofill && s:skk_in_cmdline == 0 && b:skk_henkan_mode == 0 && b:skk_rom == ""
@@ -3085,6 +3090,8 @@ function! s:SkkSelectCandidate()
         return s:SkkCancel()
       elseif key == "\<C-l>"
         let b:skk_auto_learning_once = !b:skk_auto_learning_once
+        redrawstatus
+        echo str
         continue
       endif
       let select = stridx(keys, toupper(key))
