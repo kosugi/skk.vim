@@ -4121,7 +4121,11 @@ function! s:SkkNum4(num)
   try
     let b:skk_henkan_key = a:num . " "
     let s1 = s:SkkSearch(0)
-    let s2 = s:SkkSearch(1)
+    if !b:skk_large_jisyo_searched
+      let s2 = s:SkkSearch(1)
+    else
+      let s2 = ''
+    endif
     return s:SkkMerge(s1, s2)
   finally
     let b:skk_henkan_key = saved_key
@@ -4458,7 +4462,10 @@ class VimSkk:
             vim.command("let s:skk_client_connected = 0")
             result = ''
 
-        return result
+        if result:
+            return result[1:]
+        else:
+            return result
 
     def lookup(self, key):
         return self.request('1', key)
@@ -4503,7 +4510,11 @@ class VimSkk
             VIM.command("let s:skk_client_connected = 0")
         end
 
-        return result
+        if result != ''
+            return result[1..-1]
+        else
+            return result
+        end
     end
 
     def VimSkk.lookup(key)
@@ -4757,12 +4768,12 @@ function! s:SkkCompSearch(first, key, flag)
       let list = split(cand, '/')
 
       let b:skk_serv_comp_num = num
-      if len(list) < 2
+      if len(list) < 1
         let b:skk_serv_comp = []
-      elseif list[1] ==# a:key
-        let b:skk_serv_comp = list[2:-2]
-      else
+      elseif list[0] ==# a:key
         let b:skk_serv_comp = list[1:-2]
+      else
+        let b:skk_serv_comp = list[0:-2]
       endif
     endif
     let serv_comp_num = num - b:skk_serv_comp_num
