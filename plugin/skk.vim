@@ -4,7 +4,7 @@
 "
 " Author: Noriaki Yagi <no_yag@yahoo.co.jp>
 " Version: $Id: skk.vim,v 0.22 2006/10/11 09:26:53 noriaki Exp noriaki $
-" Last Change: 2011-05-29.
+" Last Change: 2013-11-29.
 "
 " 使い方:
 " skk_jisyo および skk_large_jisyo を適宜変更する。
@@ -2681,13 +2681,23 @@ endfunction
 
 function! SkkCurrentKuten(kana)
   let b:skk_rstart = 0
-  let kuten = matchstr(g:skk_kutouten_{g:skk_kutouten_type}, "^.")
+  let l:kutouten = g:skk_kutouten_{g:skk_kutouten_type}
+  if type(l:kutouten) == 1
+    let kuten = matchstr(l:kutouten, "^.") " 文字列なら
+  else
+    let kuten = l:kutouten[0] " 配列なら
+  endif
   return a:kana . kuten
 endfunction
 
 function! SkkCurrentTouten(kana)
   let b:skk_rstart = 0
-  let touten = matchstr(g:skk_kutouten_{g:skk_kutouten_type}, ".$")
+  let l:kutouten = g:skk_kutouten_{g:skk_kutouten_type}
+  if type(l:kutouten) == 1
+    let touten = matchstr(l:kutouten, ".$") " 文字列なら
+  else
+    let touten = l:kutouten[1] " 配列なら
+  endif
   return a:kana . touten
 endfunction
 " }}}
